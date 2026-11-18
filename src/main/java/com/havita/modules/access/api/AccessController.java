@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -82,6 +83,16 @@ public class AccessController {
         VisitorResponse response = visitorService.create(request, preAuth);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok(response, "Visita registrada exitosamente"));
+    }
+
+    /** Administracion y porteria editan los datos de un visitante de su comunidad (otra comunidad: 404). */
+    @PutMapping("/visitors/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')")
+    @Operation(summary = "Editar datos del visitante (administración y portería)")
+    public ResponseEntity<ApiResponse<VisitorResponse>> updateVisitor(
+            @PathVariable UUID id,
+            @Valid @RequestBody com.havita.modules.access.api.dto.UpdateVisitorRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(visitorService.updateAsStaff(id, request), "Visita actualizada"));
     }
 
     @PostMapping("/visitors/{id}/entry")

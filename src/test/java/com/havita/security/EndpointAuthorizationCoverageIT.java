@@ -107,7 +107,13 @@ class EndpointAuthorizationCoverageIT extends PostgresIntegrationTest {
             // P8-B: /intercom/calls/incoming (residente llamado frente a otro residente, porteria y otra comunidad).
             "IntercomPushIT",
             // Fase 3: chat interno (residente propio frente a otro residente, porteria de otra comunidad, responsable).
-            "ChatIT");
+            "ChatIT",
+            // /staff/{id}/status: administracion propia frente a otra comunidad, porteria y residentes; revoca el acceso.
+            "StaffStatusAccessIT",
+            // /staff/{id} y /staff/{id}/access: escalada de rol, cuentas compartidas, otra comunidad, porteria y residentes.
+            "StaffAccessManagementIT",
+            // /access/visitors/{id} (PUT): administracion y porteria propias frente a otra comunidad y residentes.
+            "VisitorStaffEditIT");
 
     /**
      * Ambitos administrativos: un endpoint de estas rutas nunca puede quedar PUBLIC ni AUTHENTICATED sin expresion,

@@ -49,6 +49,7 @@ import jakarta.validation.constraints.Size;
 import org.springframework.web.bind.annotation.PathVariable;
 import jakarta.validation.constraints.Size;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import jakarta.validation.constraints.Size;
 import org.springframework.web.bind.annotation.RequestBody;
 import jakarta.validation.constraints.Size;
@@ -109,6 +110,47 @@ public class StaffController {
         StaffMemberResponse response = staffService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.ok(response, "Colaborador registrado exitosamente"));
+    }
+
+    /**
+     * Activa o desactiva a un colaborador de ESTA comunidad (otra comunidad: 404). Si tiene cuenta, su membresia de
+     * personal (STAFF / SECURITY) en esta comunidad pasa al mismo estado: al desactivarlo pierde el acceso en la
+     * siguiente peticion, se cierran sus conexiones en tiempo real y, si no le queda ningun acceso, sus sesiones.
+     */
+    @PostMapping("/{id}/status")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')")
+    @Operation(summary = "Activar o desactivar colaborador (y su acceso al sistema)")
+    public ResponseEntity<ApiResponse<StaffMemberResponse>> updateStatus(
+            @PathVariable UUID id,
+            @Valid @RequestBody com.havita.modules.staff.api.dto.UpdateStaffStatusRequest request) {
+        StaffMemberResponse response = staffService.updateStatus(id, request.status());
+        String message = response.status() == com.havita.modules.staff.domain.StaffMemberStatus.ACTIVE
+                ? "Colaborador activado" : "Colaborador desactivado";
+        return ResponseEntity.ok(ApiResponse.ok(response, message));
+    }
+
+    /** Edita los datos de un colaborador de ESTA comunidad (otra comunidad: 404). */
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')")
+    @Operation(summary = "Editar datos del colaborador")
+    public ResponseEntity<ApiResponse<StaffMemberResponse>> update(
+            @PathVariable UUID id,
+            @Valid @RequestBody com.havita.modules.staff.api.dto.UpdateStaffMemberRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(staffService.update(id, request), "Colaborador actualizado"));
+    }
+
+    /**
+     * Acceso al sistema del colaborador en ESTA comunidad: activarlo (creando la cuenta si no la tiene), cambiar su rol
+     * (solo STAFF o SECURITY), su correo o su contrasena (solo si la cuenta no tiene acceso en otra comunidad), o
+     * desactivarlo. La contrasena nunca se devuelve.
+     */
+    @PutMapping("/{id}/access")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')")
+    @Operation(summary = "Gestionar acceso al sistema del colaborador")
+    public ResponseEntity<ApiResponse<StaffMemberResponse>> updateAccess(
+            @PathVariable UUID id,
+            @Valid @RequestBody com.havita.modules.staff.api.dto.UpdateStaffAccessRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(staffService.updateAccess(id, request), "Acceso actualizado"));
     }
 
     // --- Turnos (Shifts) ---

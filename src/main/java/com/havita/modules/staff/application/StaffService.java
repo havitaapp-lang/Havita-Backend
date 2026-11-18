@@ -40,6 +40,8 @@ public class StaffService {
     private final PasswordEncoder passwordEncoder;
     private final com.havita.modules.identity.application.GlobalEmailValidationService globalEmailValidationService;
     private final com.havita.modules.identity.application.TenantUserResolver tenantUserResolver;
+    /** Al cambiar la contrasena o el correo de acceso se cierran las sesiones abiertas de esa cuenta. */
+    private final com.havita.modules.identity.infrastructure.RefreshTokenRepository refreshTokenRepository;
 
     @Transactional(readOnly = true)
     public Page<StaffMemberResponse> findAll(String search, Pageable pageable) {
@@ -53,6 +55,208 @@ public class StaffService {
         }
 
         return page.map(this::toResponse);
+    }
+
+    /**
+     * Activa o desactiva a un colaborador de la comunidad actual y, si tiene cuenta, su membresia de personal en ESTA
+     * comunidad. Antes la pantalla solo lo guardaba en el navegador: un portero «suspendido» conservaba su acceso.
+     *
+     * <ul>
+     *   <li>Solo se toca la membresia de esta comunidad y solo si es de personal (STAFF / SECURITY): nunca el usuario
+     *       global, otras comunidades ni un rol de administracion.</li>
+     *   <li>Al guardar la membresia, {@code AccessChangeEntityListener} publica {@code AccessChangedEvent}; tras el
+     *       commit se cierran sus SSE, se liberan sus chats, se desactivan sus avisos push y, si no le queda ningun
+     *       acceso, se revocan sus sesiones. La autorizacion se decide en cada peticion contra PostgreSQL.</li>
+     *   <li>Reactivar solo devuelve el acceso si la cuenta del usuario sigue ACTIVE.</li>
+     * </ul>
+     */
+    @Transactional
+    public StaffMemberResponse updateStatus(UUID id, StaffMemberStatus newStatus) {
+        // SEC-9 (P1): permiso comprobado de nuevo dentro de la transaccion (FOR SHARE), como al crear.
+        accessValidator.lockCommunityAdministrator();
+        UUID tenantId = TenantContextHolder.getRequiredTenantId();
+        StaffMember staff = staffMemberRepository.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("StaffMember", id));
+
+        staff.setStatus(newStatus);
+        staff = staffMemberRepository.save(staff);
+
+        User user = staff.getUser();
+        if (user != null) {
+            membershipRepository.findByUserIdAndTenantId(user.getId(), tenantId)
+                    .filter(m -> LINKABLE_STAFF_ROLES.contains(m.getRole()))
+                    .ifPresent(m -> {
+                        MembershipStatus target = newStatus == StaffMemberStatus.ACTIVE && user.getStatus() == UserStatus.ACTIVE
+                                ? MembershipStatus.ACTIVE : MembershipStatus.INACTIVE;
+                        if (m.getStatus() != target) {
+                            m.setStatus(target);
+                            membershipRepository.save(m);
+                        }
+                    });
+        }
+        log.info("Colaborador {} -> {} (acceso {})", staff.getId(), newStatus, user != null ? "actualizado" : "sin cuenta");
+        return toResponse(staff);
+    }
+
+    /**
+     * Edita los datos del colaborador (no su acceso ni su estado). Antes la pantalla solo los guardaba en el navegador.
+     * El documento sigue siendo unico en la comunidad; el correo de contacto se valida igual que al crear.
+     */
+    @Transactional
+    public StaffMemberResponse update(UUID id, com.havita.modules.staff.api.dto.UpdateStaffMemberRequest request) {
+        accessValidator.lockCommunityAdministrator();
+        UUID tenantId = TenantContextHolder.getRequiredTenantId();
+        StaffMember staff = staffMemberRepository.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("StaffMember", id));
+
+        String document = request.documentNumber().trim();
+        if (!document.equals(staff.getDocumentNumber())
+                && staffMemberRepository.existsByTenantIdAndDocumentNumber(tenantId, document)) {
+            throw new BusinessRuleConflictException("STAFF_DOCUMENT_EXISTS",
+                    "Ya existe un miembro del personal con el documento '" + document + "' en esta copropiedad.");
+        }
+        String email = request.email() == null || request.email().isBlank() ? null : request.email().trim();
+        if (email != null && (staff.getEmail() == null || !email.equalsIgnoreCase(staff.getEmail()))) {
+            // Se excluyen el propio colaborador y su cuenta (si no, su propio correo cuenta como duplicado).
+            globalEmailValidationService.validateEmailUniqueness(email,
+                    staff.getUser() != null ? staff.getUser().getId() : null, null, staff.getId());
+        }
+
+        staff.setFirstName(request.firstName().trim());
+        staff.setLastName(request.lastName().trim());
+        if (request.documentType() != null && !request.documentType().isBlank()) staff.setDocumentType(request.documentType().trim());
+        staff.setDocumentNumber(document);
+        staff.setPhone(request.phone());
+        staff.setEmail(email);
+        staff.setPosition(request.position().trim());
+        if (request.area() != null && !request.area().isBlank()) staff.setArea(request.area().trim());
+        if (request.contractType() != null && !request.contractType().isBlank()) staff.setContractType(request.contractType().trim());
+        staff.setCompany(request.company());
+        if (request.startDate() != null) staff.setStartDate(request.startDate());
+        staff.setAssignedGate(request.assignedGate());
+        staff.setObservations(request.observations());
+        staff = staffMemberRepository.save(staff);
+        log.info("Personal actualizado: id={}", staff.getId());
+        return toResponse(staff);
+    }
+
+    /**
+     * Gestiona el acceso al sistema del colaborador en ESTA comunidad. Antes la pantalla solo lo guardaba en el navegador
+     * (incluida la contrasena, en texto plano).
+     *
+     * <ul>
+     *   <li><b>Activar sin cuenta:</b> crea la cuenta (correo unico y contrasena obligatorios) y su membresia de personal.</li>
+     *   <li><b>Activar con cuenta:</b> rol STAFF o SECURITY (nunca administracion ni roles globales); la membresia solo
+     *       queda ACTIVE si el colaborador y la cuenta estan activos.</li>
+     *   <li><b>Desactivar:</b> membresia INACTIVE en esta comunidad (se cierran sus SSE, chats y push; ver
+     *       {@code AccessChangedEvent}). La cuenta no se borra.</li>
+     *   <li><b>Correo y contrasena</b> solo se cambian si la cuenta no tiene acceso en otra comunidad: la administracion
+     *       de una comunidad no puede tomar el control de una cuenta que tambien usa otra. Tras cambiarlos se cierran sus
+     *       sesiones.</li>
+     *   <li>Una cuenta cuya membresia aqui no es de personal (p. ej. administracion) no se gestiona desde este modulo.</li>
+     * </ul>
+     */
+    @Transactional
+    public StaffMemberResponse updateAccess(UUID id, com.havita.modules.staff.api.dto.UpdateStaffAccessRequest request) {
+        accessValidator.lockCommunityAdministrator();
+        UUID tenantId = TenantContextHolder.getRequiredTenantId();
+        StaffMember staff = staffMemberRepository.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("StaffMember", id));
+        User user = staff.getUser();
+        String loginEmail = request.loginEmail() == null || request.loginEmail().isBlank()
+                ? null : request.loginEmail().trim().toLowerCase();
+        String password = request.password() == null || request.password().isBlank() ? null : request.password();
+
+        if (!Boolean.TRUE.equals(request.enabled())) {
+            if (user != null) {
+                staffMembership(user, tenantId).ifPresent(m -> {
+                    if (m.getStatus() != MembershipStatus.INACTIVE) {
+                        m.setStatus(MembershipStatus.INACTIVE);
+                        membershipRepository.save(m);
+                    }
+                });
+            }
+            log.info("Acceso del colaborador {} desactivado", staff.getId());
+            return toResponse(staff);
+        }
+
+        RoleType role = resolveStaffRole(request.systemRole());
+        if (user == null) {
+            String email = loginEmail != null ? loginEmail : (staff.getEmail() != null ? staff.getEmail().trim().toLowerCase() : null);
+            if (email == null || email.isBlank()) {
+                throw new BusinessRuleConflictException("INVALID_EMAIL", "El correo electrónico es requerido para crear el acceso al sistema.");
+            }
+            if (password == null) {
+                throw new BusinessRuleConflictException("PASSWORD_REQUIRED", "La contraseña es obligatoria para crear el acceso al sistema.");
+            }
+            // El correo de contacto del propio colaborador puede ser su correo de acceso.
+            globalEmailValidationService.validateEmailUniqueness(email, null, null, staff.getId());
+            user = userRepository.save(User.builder()
+                    .email(email)
+                    .passwordHash(passwordEncoder.encode(password))
+                    .fullName(staff.getFirstName() + " " + staff.getLastName())
+                    .phone(staff.getPhone())
+                    .status(UserStatus.ACTIVE)
+                    .hasCompletedOnboarding(true)
+                    .build());
+            staff.setUser(user);
+            staff = staffMemberRepository.save(staff);
+        } else if (loginEmail != null && !loginEmail.equalsIgnoreCase(user.getEmail()) || password != null) {
+            requireExclusiveAccount(user, tenantId);
+            if (loginEmail != null && !loginEmail.equalsIgnoreCase(user.getEmail())) {
+                globalEmailValidationService.validateEmailUniqueness(loginEmail, user.getId(), null, staff.getId());
+                user.setEmail(loginEmail);
+            }
+            if (password != null) user.setPasswordHash(passwordEncoder.encode(password));
+            user = userRepository.save(user);
+            refreshTokenRepository.revokeAllByUserId(user.getId());
+        }
+
+        final User account = user;
+        Membership membership = membershipRepository.findByUserIdAndTenantId(account.getId(), tenantId).orElse(null);
+        if (membership != null && !LINKABLE_STAFF_ROLES.contains(membership.getRole())) {
+            throw new BusinessRuleConflictException("STAFF_ACCOUNT_NOT_MANAGEABLE",
+                    "Esta cuenta tiene otro rol en la comunidad y no se gestiona desde Personal.");
+        }
+        MembershipStatus target = staff.getStatus() == StaffMemberStatus.ACTIVE && account.getStatus() == UserStatus.ACTIVE
+                ? MembershipStatus.ACTIVE : MembershipStatus.INACTIVE;
+        if (membership == null) {
+            membership = Membership.builder().user(account).tenantId(tenantId).role(role).status(target).build();
+            membershipRepository.save(membership);
+        } else if (membership.getRole() != role || membership.getStatus() != target) {
+            membership.setRole(role);
+            membership.setStatus(target);
+            membershipRepository.save(membership);
+        }
+        log.info("Acceso del colaborador {} activo con rol {}", staff.getId(), role);
+        return toResponse(staff);
+    }
+
+    /** Solo STAFF o SECURITY (por defecto STAFF). Nunca administracion ni roles globales. */
+    private RoleType resolveStaffRole(String raw) {
+        if (raw == null || raw.isBlank()) return RoleType.STAFF;
+        try {
+            RoleType role = RoleType.valueOf(raw.trim().toUpperCase());
+            if (LINKABLE_STAFF_ROLES.contains(role)) return role;
+        } catch (IllegalArgumentException ignored) {
+            // cae al error de abajo
+        }
+        throw new org.springframework.security.access.AccessDeniedException("Solo puedes asignar los roles STAFF o SECURITY al personal.");
+    }
+
+    private java.util.Optional<Membership> staffMembership(User user, UUID tenantId) {
+        return membershipRepository.findByUserIdAndTenantId(user.getId(), tenantId)
+                .filter(m -> LINKABLE_STAFF_ROLES.contains(m.getRole()));
+    }
+
+    /** El correo y la contrasena solo se cambian si la cuenta no tiene ninguna membresia en otra comunidad. */
+    private void requireExclusiveAccount(User user, UUID tenantId) {
+        boolean shared = membershipRepository.findByUserId(user.getId()).stream()
+                .anyMatch(m -> !tenantId.equals(m.getTenantId()));
+        if (shared) {
+            throw new BusinessRuleConflictException("STAFF_ACCOUNT_SHARED",
+                    "La cuenta también tiene acceso en otra comunidad: su correo y su contraseña solo los puede cambiar su titular.");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -225,7 +429,18 @@ public class StaffService {
                 s.getAvatarUrl(),
                 s.getObservations(),
                 s.getCreatedAt(),
-                s.getUpdatedAt()
+                s.getUpdatedAt(),
+                systemAccess(s)
         );
+    }
+
+    /** Acceso en ESTA comunidad (sin contrasena). Solo cuentas con membresia de personal aqui. */
+    private StaffMemberResponse.SystemAccess systemAccess(StaffMember s) {
+        User user = s.getUser();
+        if (user == null || s.getTenantId() == null) return StaffMemberResponse.SystemAccess.NONE;
+        return staffMembership(user, s.getTenantId())
+                .map(m -> new StaffMemberResponse.SystemAccess(true, user.getEmail(), m.getRole().name(), m.getStatus().name(),
+                        membershipRepository.findByUserId(user.getId()).stream().anyMatch(o -> !s.getTenantId().equals(o.getTenantId()))))
+                .orElse(StaffMemberResponse.SystemAccess.NONE);
     }
 }

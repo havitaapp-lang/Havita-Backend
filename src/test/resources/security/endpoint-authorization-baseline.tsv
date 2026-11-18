@@ -21,6 +21,7 @@ GET	/api/v1/access/visitors/by-property/{propertyId}	pre:hasAnyRole('SUPER_ADMIN
 DELETE	/api/v1/access/visitors/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
 GET	/api/v1/access/visitors/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	IT:UnverifiedEndpointsIsolationIT	
 POST	/api/v1/access/visitors/{id}/authorize	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+PUT	/api/v1/access/visitors/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:VisitorStaffEditIT	Administracion y porteria editan los datos del visitante de SU comunidad (otra comunidad 404, residente 403, visita cerrada 409)
 POST	/api/v1/access/visitors/{id}/entry	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
 POST	/api/v1/access/visitors/{id}/exit	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
 GET	/api/v1/accounting/config	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'ACCOUNTANT')	NONE	
@@ -260,6 +261,9 @@ POST	/api/v1/saas/tenants/{tenantId}/invoices/generate	pre:hasRole('SUPER_ADMIN'
 POST	/api/v1/saas/tenants/{tenantId}/subscribe	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
 GET	/api/v1/staff	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
 POST	/api/v1/staff	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+POST	/api/v1/staff/{id}/status	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:StaffStatusAccessIT	Activa o desactiva al colaborador y su membresia de personal en ESTA comunidad (otra comunidad 404, porteria y residentes 403; nunca toca administracion)
+PUT	/api/v1/staff/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:StaffAccessManagementIT	Edita datos del colaborador de ESTA comunidad (otra comunidad 404, residente 403, documento repetido 409)
+PUT	/api/v1/staff/{id}/access	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:StaffAccessManagementIT	Acceso del colaborador en ESTA comunidad: solo STAFF/SECURITY, sin contrasena en la respuesta, no cambia credenciales de cuentas compartidas con otra comunidad, no gestiona administracion
 GET	/api/v1/staff/attendance	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
 GET	/api/v1/staff/attendance/by-date	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
 GET	/api/v1/staff/attendance/by-staff/{staffMemberId}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	IT:UnverifiedEndpointsIsolationIT	

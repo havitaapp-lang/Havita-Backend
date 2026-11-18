@@ -342,6 +342,37 @@ public class VisitorService {
                 .toList();
     }
 
+    /**
+     * Administracion y porteria editan los datos de un visitante de SU comunidad (otra comunidad: 404). Antes la pantalla
+     * solo lo cambiaba en el navegador. No se edita una visita que ya salio o se cancelo (historial); la unidad y el
+     * estado no cambian aqui.
+     */
+    @Transactional
+    public VisitorResponse updateAsStaff(UUID id, com.havita.modules.access.api.dto.UpdateVisitorRequest request) {
+        UUID tenantId = TenantContextHolder.getRequiredTenantId();
+        Visitor visitor = visitorRepository.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResourceNotFoundException("Visitor", id));
+        if (visitor.getStatus() == VisitorStatus.EXITED || visitor.getStatus() == VisitorStatus.CANCELLED) {
+            throw new com.havita.common.exception.BusinessRuleConflictException("VISITOR_CLOSED",
+                    "No se puede modificar una visita que ya salió o fue cancelada.");
+        }
+        visitor.setName(request.name().trim());
+        visitor.setDocumentId(request.documentId().trim());
+        visitor.setVehiclePlate(request.vehiclePlate() == null || request.vehiclePlate().isBlank()
+                ? null : request.vehiclePlate().trim().toUpperCase());
+        visitor.setObservations(request.observations() == null || request.observations().isBlank() ? null : request.observations().trim());
+        if (request.visitPurpose() != null && !request.visitPurpose().isBlank()) visitor.setVisitPurpose(request.visitPurpose().trim());
+        visitor = visitorRepository.save(visitor);
+
+        VisitorResponse staffResponse = toStaffResponse(visitor);
+        syncEventPublisher.publish(new com.havita.modules.sync.domain.SyncEvent(
+                "VISITOR_UPDATED", tenantId,
+                java.util.Map.of("visitor", toResponse(visitor), "visitorId", visitor.getId().toString(), "status", visitor.getStatus()),
+                com.havita.modules.sync.domain.SyncAudience.unit(visitor.getProperty() != null ? visitor.getProperty().getId() : null)));
+        log.info("Visita {} actualizada por el personal", visitor.getId());
+        return staffResponse;
+    }
+
     @Transactional
     public VisitorResponse updateAccessibleVisitor(UUID id, UUID propertyId, UUID userId,
                                                   String name, String documentId, String vehiclePlate,
