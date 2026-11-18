@@ -1,0 +1,6 @@
+# Perfil de desarrollo local (--spring.profiles.active=local). SEC-9-9: habilita OpenAPI y Swagger UI solo aqui.
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true

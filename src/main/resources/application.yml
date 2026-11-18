@@ -1,0 +1,103 @@
+spring:
+  application:
+    name: havita-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/appunidades}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:admin}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: America/Bogota
+  flyway:
+    enabled: false
+    baseline-on-migrate: false
+    locations: classpath:db/migration
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
+  data:
+    web:
+      pageable:
+        default-page-size: 100
+        max-page-size: 5000
+
+server:
+  port: 9094
+  servlet:
+    context-path: /
+
+management:
+  # SEC-9-9: solo health (HEALTHCHECK del Dockerfile). Sin metrics, info, env ni configprops por HTTP.
+  endpoints:
+    web:
+      exposure:
+        include: health
+      # Sin el indice /actuator (enlaces de descubrimiento).
+      discovery:
+        enabled: false
+  endpoint:
+    health:
+      # Solo UP/DOWN: sin detalles de base de datos, disco ni componentes.
+      show-details: never
+      show-components: never
+
+springdoc:
+  # SEC-9-9: desactivado por defecto. En desarrollo: perfil "local" (application-local.yml) o SPRINGDOC_ENABLED=true.
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:false}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:false}
+    path: /swagger-ui.html
+    operationsSorter: method
+
+storage:
+  provider: ${STORAGE_PROVIDER:local}
+  local:
+    base-path: ${STORAGE_LOCAL_PATH:./storage}
+    base-url: ${STORAGE_LOCAL_BASE_URL:/api/v1}
+  r2:
+    endpoint: ${STORAGE_R2_ENDPOINT:}
+    bucket-name: ${STORAGE_R2_BUCKET:havita-storage}
+    public-url: ${STORAGE_R2_PUBLIC_URL:https://cdn.havita.com}
+
+logging:
+  # SEC-9 (P2): cada linea lleva el traceId de la peticion (CorrelationIdFilter / X-Correlation-ID) para correlacionar
+  # eventos de seguridad sin escribir datos personales.
+  pattern:
+    level: "%5p [%X{traceId:-}]"
+  file:
+    name: application.log
+
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:my-secret-key-that-is-at-least-256-bits-long}
+  email:
+    brevo:
+      api-key: ${BREVO_API_KEY:dummy-brevo-api-key}
+    sender:
+      address: no-reply@havita.com.co
+      name: Havita
+  cloudflare:
+    account-id: ${CLOUDFLARE_ACCOUNT_ID:ed15cc7cccf6ca58634134073e1a5b19}
+    api-token: ${CLOUDFLARE_API_TOKEN:}
+  realtimekit:
+    app-id: ${REALTIMEKIT_APP_ID:dcb166b1-6322-4591-82b1-8793b105b3c4}
+    preset-name: ${REALTIMEKIT_PRESET_NAME:group_call_participant}
+    base-url: ${REALTIMEKIT_BASE_URL:https://api.cloudflare.com/client/v4}
+
+# Web Push VAPID Configuration
+vapid:
+  public-key: ${VAPID_PUBLIC_KEY:}
+  private-key: ${VAPID_PRIVATE_KEY:}
+  subject: ${VAPID_SUBJECT:mailto:soporte@havita.com.co}

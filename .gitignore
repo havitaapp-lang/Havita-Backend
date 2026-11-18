@@ -1,0 +1,11 @@
+# P7-E: evita versionar secretos y artefactos locales (no cambia ningun archivo existente).
+.env
+.env.*
+!.env.example
+*.log
+*.log.*.gz
+application.log*
+storage/
+build/
+.gradle/
+.idea/

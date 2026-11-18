@@ -1,0 +1,299 @@
+# SEC-9 P2 - Linea base de autorizacion por endpoint (revisada a mano). La valida EndpointAuthorizationCoverageIT.
+# Columnas (TAB): METHOD  PATH  ACCESS  RESOURCE  JUSTIFICATION
+# ACCESS: PUBLIC | AUTHENTICATED | expresion normalizada. RESOURCE: NONE | GLOBAL_ONLY | EXPR (parcial: solo RESIDENT) | SELF |
+#   PUBLIC_TOKEN | IT:<Clase> | UNVERIFIED (solo declarativa; tope en MAX_UNVERIFIED) | FRAMEWORK.
+# Un endpoint nuevo, un cambio de politica o una fila obsoleta hacen fallar la prueba hasta revisar esta tabla.
+GET	/actuator/health	PUBLIC	FRAMEWORK	Actuator: health check de la plataforma (HEALTHCHECK del Dockerfile); solo UP/DOWN, sin detalles (SEC-9-9)
+GET	/actuator/health/**	PUBLIC	FRAMEWORK	Actuator: grupos de health; show-components=never, solo UP/DOWN (SEC-9-9)
+GET	/api/v1/access/packages	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	NONE	
+POST	/api/v1/access/packages	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
+GET	/api/v1/access/packages/by-property/{propertyId}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF') or (hasRole('RESIDENT') and @accessValidator.isActiveResidentOfProperty(#propertyId))	IT:ResidentScopedExpressionsIT	Cierre SEC-9: expresion con recurso solo para RESIDENT; servicio filtra por comunidad; matriz de roles y aislamiento A/B probados
+DELETE	/api/v1/access/packages/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/access/packages/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF', 'RESIDENT')	IT:UnitScopedResourcesIT	
+POST	/api/v1/access/packages/{id}/confirm-pickup	pre:hasRole('RESIDENT')	IT:UnitScopedResourcesIT	El residente confirma la recogida: solo paquetes de SUS unidades activas (unidad del vecino 404, otra comunidad 404, ya entregado 409, porteria 403)
+POST	/api/v1/access/packages/{id}/deliver	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/access/packages/{id}/notify	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/access/visitor-settings	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT')	NONE	
+PUT	/api/v1/access/visitor-settings	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/access/visitors	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	NONE	
+POST	/api/v1/access/visitors	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
+GET	/api/v1/access/visitors/by-property/{propertyId}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	IT:UnverifiedEndpointsIsolationIT	
+DELETE	/api/v1/access/visitors/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/access/visitors/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/access/visitors/{id}/authorize	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/access/visitors/{id}/entry	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/access/visitors/{id}/exit	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/accounting/config	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'ACCOUNTANT')	NONE	
+PUT	/api/v1/accounting/config	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/accounting/invoices	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'ACCOUNTANT', 'RESIDENT')	NONE	
+POST	/api/v1/accounting/invoices	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'ACCOUNTANT')	NONE	
+GET	/api/v1/accounting/invoices/by-property/{propertyId}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'ACCOUNTANT') or (hasRole('RESIDENT') and @accessValidator.isActiveResidentOfProperty(#propertyId))	IT:ResidentScopedExpressionsIT	Cierre SEC-9: expresion con recurso solo para RESIDENT; servicio filtra por comunidad; matriz de roles y aislamiento A/B probados
+POST	/api/v1/accounting/invoices/generate-monthly	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'ACCOUNTANT')	NONE	
+POST	/api/v1/accounting/payments	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'ACCOUNTANT')	NONE	
+GET	/api/v1/accounting/properties/{propertyId}/balance	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'ACCOUNTANT') or (hasRole('RESIDENT') and @accessValidator.isActiveResidentOfProperty(#propertyId))	IT:ResidentScopedExpressionsIT	Cierre SEC-9: expresion con recurso solo para RESIDENT; servicio filtra por comunidad; matriz de roles y aislamiento A/B probados
+GET	/api/v1/admin/marketplace/config	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+PUT	/api/v1/admin/marketplace/config	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+POST	/api/v1/admin/marketplace/config/toggle	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/admin/marketplace/listings	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/admin/marketplace/listings/pending	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+POST	/api/v1/admin/marketplace/listings/{id}/approve	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/admin/marketplace/listings/{id}/hide	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/admin/marketplace/listings/{id}/reject	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/admin/marketplace/listings/{id}/unhide	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/admin/marketplace/reports	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+POST	/api/v1/admin/marketplace/reports/{id}/resolve	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/assemblies	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT')	NONE	
+POST	/api/v1/assemblies	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/assemblies/polls	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT')	NONE	
+POST	/api/v1/assemblies/polls	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/assemblies/polls/{pollId}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT')	IT:ResidentRemovalIT	
+GET	/api/v1/assemblies/polls/{pollId}/my-voting-units	pre:hasRole('RESIDENT')	IT:PollVotingIT	Fase 2 / E3: unidades propias del residente (ResidentUnitResolver); pregunta de otra comunidad 404
+POST	/api/v1/assemblies/polls/{pollId}/close	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/assemblies/polls/{pollId}/open	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/assemblies/polls/{pollId}/vote	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT')	IT:SseEventPolicyIT	
+GET	/api/v1/assemblies/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/assemblies/{id}/attendees	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT')	IT:AssemblyPrivacyIT	
+POST	/api/v1/assemblies/{id}/attendees	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/assemblies/{id}/attendees/eligible-representatives	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:AssemblyRepresentationIT	Cierre E5 / D14: personas de la unidad que pueden representarla; unidad o asamblea de otra comunidad 404; residente 403
+PUT	/api/v1/assemblies/{id}/attendees/{attendeeId}/representative	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:AssemblyRepresentationIT	Cierre E5 / D14: regulariza una asistencia sin persona; persona o asamblea de otra comunidad 404; sin sustituir
+GET	/api/v1/assemblies/{id}/my-attendance-units	pre:hasRole('RESIDENT')	IT:AssemblyConsolidationIT	Fase 2 / E5: unidades propias del residente (ResidentUnitResolver) y su asistencia; asamblea de otra comunidad 404; gestion 403
+POST	/api/v1/assemblies/{id}/attendees/self-register	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT')	IT:AssemblyPrivacyIT	
+POST	/api/v1/assemblies/{id}/finish	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/assemblies/{id}/polls	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT')	IT:AssemblyPrivacyIT	
+POST	/api/v1/assemblies/{id}/start	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/assemblies/{id}/voting-rights	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/audit/events	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+GET	/api/v1/audit/logs	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'READ_ONLY', 'COMMUNITY_ADMIN')	NONE	
+POST	/api/v1/auth/forgot-password	PUBLIC	NONE	Solicitud de recuperacion de contrasena; respuesta identica exista o no la cuenta
+POST	/api/v1/auth/login	PUBLIC	NONE	Inicio de sesion (credenciales)
+POST	/api/v1/auth/logout	AUTHENTICATED	NONE	Autoservicio: revoca la sesion del propio usuario
+POST	/api/v1/auth/refresh	PUBLIC	NONE	Renovacion con refresh token; revalida cuenta y membresias ACTIVE (SEC-9)
+POST	/api/v1/auth/reset-password	PUBLIC	NONE	Restablecimiento con token de un solo uso y caducidad de 15 min
+GET	/api/v1/chat/me/conversations	pre:hasRole('RESIDENT')	NONE	
+POST	/api/v1/chat/me/messages	pre:hasRole('RESIDENT')	NONE	
+GET	/api/v1/chat/me/conversations/{id}/messages	pre:hasRole('RESIDENT')	IT:ChatIT	Fase 3 (chat): solo el propio residente con relacion ACTIVA con la unidad (otro residente 404, otra comunidad 404, unidad perdida 404)
+POST	/api/v1/chat/me/conversations/{id}/read	pre:hasRole('RESIDENT')	IT:ChatIT	Fase 3 (chat): solo el propio residente (otro residente 404)
+GET	/api/v1/chat/inbox/conversations	pre:hasAnyRole('SECURITY', 'COMMUNITY_ADMIN')	NONE	
+POST	/api/v1/chat/inbox/conversations	pre:hasRole('SECURITY')	NONE	
+GET	/api/v1/chat/inbox/conversations/{id}	pre:hasAnyRole('SECURITY', 'COMMUNITY_ADMIN')	IT:ChatIT	Fase 3 (chat): porteria de la comunidad de la conversacion (otra comunidad 404; residente 403; administracion solo lectura)
+GET	/api/v1/chat/inbox/conversations/{id}/messages	pre:hasAnyRole('SECURITY', 'COMMUNITY_ADMIN')	IT:ChatIT	Fase 3 (chat): porteria de la comunidad (otra comunidad 404); administracion de la comunidad solo lectura
+GET	/api/v1/chat/inbox/conversations/{id}/events	pre:hasAnyRole('SECURITY', 'COMMUNITY_ADMIN')	IT:ChatIT	Fase 3 (chat): porteria de la comunidad (otra comunidad 404); administracion de la comunidad solo lectura
+POST	/api/v1/chat/inbox/conversations/{id}/messages	pre:hasRole('SECURITY')	IT:ChatIT	Fase 3 (chat): solo el responsable (otro portero 409, otra comunidad 404, portero desactivado 401/403)
+POST	/api/v1/chat/inbox/conversations/{id}/claim	pre:hasRole('SECURITY')	IT:ChatIT	Fase 3 (chat): asignacion atomica (concurrencia: uno 200 y otro 409; otra comunidad 404)
+POST	/api/v1/chat/inbox/conversations/{id}/release	pre:hasRole('SECURITY')	IT:ChatIT	Fase 3 (chat): solo el responsable (otro portero 409, otra comunidad 404)
+POST	/api/v1/chat/inbox/conversations/{id}/transfer	pre:hasRole('SECURITY')	IT:ChatIT	Fase 3 (chat): solo el responsable y a un portero activo de la misma comunidad (409; otra comunidad 404)
+POST	/api/v1/chat/inbox/conversations/{id}/close	pre:hasRole('SECURITY')	IT:ChatIT	Fase 3 (chat): responsable, o cualquier portero si esta PENDING (otro portero 409, otra comunidad 404)
+POST	/api/v1/chat/inbox/conversations/{id}/read	pre:hasRole('SECURITY')	IT:ChatIT	Fase 3 (chat): solo cuenta la lectura del responsable (otra comunidad 404)
+GET	/api/v1/chat/inbox/agents	pre:hasRole('SECURITY')	NONE	
+GET	/api/v1/chat/inbox/residents	pre:hasRole('SECURITY')	NONE	
+GET	/api/v1/communications	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF', 'RESIDENT')	NONE	
+POST	/api/v1/communications	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/communications/documents	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF', 'RESIDENT')	NONE	
+POST	/api/v1/communications/documents	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+DELETE	/api/v1/communications/documents/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/communications/documents/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF', 'RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+PUT	/api/v1/communications/documents/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/communications/documents/{id}/download	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF', 'RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+DELETE	/api/v1/communications/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/communications/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF', 'RESIDENT')	IT:SseEventPolicyIT	
+PUT	/api/v1/communications/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/communications/{id}/archive	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/communications/{id}/publish	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/feature-flags	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT', 'SECURITY', 'STAFF')	NONE	
+POST	/api/v1/feature-flags	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+GET	/api/v1/feature-flags/check/{flagKey}	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT', 'SECURITY', 'STAFF')	UNVERIFIED	Catalogo global de flags (no es un recurso de comunidad); el resultado se calcula para la comunidad efectiva del llamante. Riesgo BAJO
+POST	/api/v1/feature-flags/tenants/{tenantId}/flags/{flagId}/override	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+PUT	/api/v1/feature-flags/{id}/toggle	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+DELETE	/api/v1/files	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/files/download	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF', 'RESIDENT')	NONE	
+GET	/api/v1/files/signed	PUBLIC	PUBLIC_TOKEN	SEC-9-9: URL firmada (HMAC, 10 min) para <img>; el controlador revalida contra PostgreSQL el acceso vigente del usuario firmante y la visibilidad del recurso en cada peticion (FileAccessSecurityIT)
+POST	/api/v1/files/upload	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT')	NONE	
+GET	/api/v1/health	PUBLIC	NONE	Health check de la aplicacion sin datos (permitAll)
+GET	/api/v1/identity/consents	AUTHENTICATED	NONE	Autoservicio: consentimientos legales del propio usuario
+POST	/api/v1/identity/consents	AUTHENTICATED	NONE	Autoservicio: registra la aceptacion legal del propio usuario
+POST	/api/v1/intercom/calls	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
+GET	/api/v1/intercom/calls/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/intercom/calls/incoming	pre:hasRole('RESIDENT')	IT:IntercomPushIT	P8-B: solo la llamada RINGING del propio residente llamado con relacion ACTIVA, sin token (otro residente null, porteria 403, otra comunidad null o 401/403)
+POST	/api/v1/intercom/calls/{id}/accept	pre:hasRole('RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/intercom/calls/{id}/prepare	pre:hasRole('RESIDENT')	IT:IntercomEarlyTokenIT	P8-A3: solo el residente llamado, con relacion ACTIVA y la llamada RINGING (otro residente 403, porteria 403, otra comunidad 404); 404 con la bandera desactivada
+POST	/api/v1/intercom/calls/{id}/cancel	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/intercom/calls/{id}/connected	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/intercom/calls/{id}/end	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/intercom/calls/{id}/reject	pre:hasRole('RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/intercom/directory/units	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
+GET	/api/v1/intercom/directory/units/{propertyId}/residents	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/intercom/history	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
+POST	/api/v1/intercom/push-receipts	PUBLIC	PUBLIC_TOKEN	P8-B: recibo del service worker (sin sesion) autorizado por un nonce de 128 bits de un solo uso que viaja cifrado en el aviso; siempre 204, no devuelve datos, limitado por cliente
+GET	/api/v1/intercom/units	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
+GET	/api/v1/intercom/units/{propertyId}/residents	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/marketplace/listings	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF', 'RESIDENT')	NONE	
+POST	/api/v1/marketplace/listings	pre:hasRole('RESIDENT')	NONE	
+DELETE	/api/v1/marketplace/listings/{id}	pre:hasRole('RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/marketplace/listings/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF', 'RESIDENT')	IT:FileAccessSecurityIT	
+PATCH	/api/v1/marketplace/listings/{id}	pre:hasRole('RESIDENT')	IT:FileAccessSecurityIT	
+POST	/api/v1/marketplace/listings/{id}/hide	pre:hasRole('RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+DELETE	/api/v1/marketplace/listings/{id}/permanent	pre:hasRole('RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/marketplace/listings/{id}/report	pre:hasRole('RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/marketplace/listings/{id}/unhide	pre:hasRole('RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/marketplace/my-listings	pre:hasRole('RESIDENT')	NONE	
+POST	/api/v1/memberships	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+DELETE	/api/v1/memberships/{id}	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+GET	/api/v1/organizations	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'READ_ONLY') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+POST	/api/v1/organizations	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+GET	/api/v1/organizations/{id}	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'READ_ONLY') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+PUT	/api/v1/organizations/{id}	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+GET	/api/v1/pqrs	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'STAFF', 'SECURITY')	NONE	
+POST	/api/v1/pqrs	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT', 'STAFF')	NONE	
+GET	/api/v1/pqrs/by-property/{propertyId}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'STAFF', 'SECURITY') or (hasRole('RESIDENT') and @accessValidator.isActiveResidentOfProperty(#propertyId))	IT:ResidentScopedExpressionsIT	Cierre SEC-9: expresion con recurso solo para RESIDENT; servicio filtra por comunidad; matriz de roles y aislamiento A/B probados
+DELETE	/api/v1/pqrs/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:PqrsPrivacyIT	
+GET	/api/v1/pqrs/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'STAFF', 'SECURITY', 'RESIDENT')	IT:ResidentRemovalIT	
+PUT	/api/v1/pqrs/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'STAFF')	IT:PqrsPrivacyIT	
+POST	/api/v1/pqrs/{id}/assign/{technicianUserId}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:PqrsPrivacyIT	
+POST	/api/v1/pqrs/{id}/comments	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'STAFF', 'RESIDENT')	IT:PqrsPrivacyIT	
+POST	/api/v1/pqrs/{id}/resolve	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'STAFF')	IT:PqrsPrivacyIT	
+GET	/api/v1/properties	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	NONE	
+POST	/api/v1/properties	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+POST	/api/v1/properties/bulk/generate	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+POST	/api/v1/properties/bulk/import	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/properties/by-structure/{structureId}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/properties/coefficients/total	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/properties/structures	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF', 'RESIDENT')	NONE	
+POST	/api/v1/properties/structures	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+DELETE	/api/v1/properties/structures/by-name/{name}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/properties/zones	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF', 'RESIDENT')	NONE	
+POST	/api/v1/properties/zones	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+PUT	/api/v1/properties/zones/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+DELETE	/api/v1/properties/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/properties/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF') or (hasRole('RESIDENT') and @accessValidator.isActiveResidentOfProperty(#id))	IT:ResidentScopedExpressionsIT	Cierre SEC-9: expresion con recurso solo para RESIDENT; servicio filtra por comunidad; matriz de roles y aislamiento A/B probados
+PUT	/api/v1/properties/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:AdminAuthorizationIT	
+GET	/api/v1/properties/{propertyId}/history	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/properties/{propertyId}/resident-invitations	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'STAFF')	IT:InvitationTokenSecurityIT	
+POST	/api/v1/properties/{propertyId}/resident-invitations	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:InvitationTokenSecurityIT	
+POST	/api/v1/properties/{propertyId}/transfer-owner	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:InvitationTokenSecurityIT	
+DELETE	/api/v1/properties/{propertyId}/voting-delegation	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN') or (hasRole('RESIDENT') and @accessValidator.isActiveResidentOfProperty(#propertyId))	IT:ResidentScopedExpressionsIT	Cierre SEC-9: expresion con recurso solo para RESIDENT; servicio filtra por comunidad; matriz de roles y aislamiento A/B probados
+GET	/api/v1/properties/{propertyId}/voting-delegation	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN') or (hasRole('RESIDENT') and @accessValidator.isActiveResidentOfProperty(#propertyId))	IT:ResidentScopedExpressionsIT	Cierre SEC-9: expresion con recurso solo para RESIDENT; servicio filtra por comunidad; matriz de roles y aislamiento A/B probados
+POST	/api/v1/properties/{propertyId}/voting-delegation	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN') or (hasRole('RESIDENT') and @accessValidator.isActiveResidentOfProperty(#propertyId))	IT:ResidentScopedExpressionsIT	Cierre SEC-9: expresion con recurso solo para RESIDENT; servicio filtra por comunidad; matriz de roles y aislamiento A/B probados
+POST	/api/v1/public/demo-requests	PUBLIC	NONE	Formulario comercial publico de la landing. Riesgo: envia correo HTML con datos del formulario sin escapar a la direccion indicada
+GET	/api/v1/public/resident-invitations/{token}	PUBLIC	PUBLIC_TOKEN	Validacion de una invitacion por su token secreto de un solo uso (SEC-7: hash SHA-256, caducidad)
+POST	/api/v1/public/resident-invitations/{token}/register	PUBLIC	PUBLIC_TOKEN	Registro del invitado con el token secreto de un solo uso (SEC-7); el destinatario queda ligado al correo invitado
+GET	/api/v1/public/tenant-config	PUBLIC	NONE	Marca y configuracion publica de la comunidad para la pantalla de login (sin datos personales)
+GET	/api/v1/public/visitor-passes/{token}	PUBLIC	PUBLIC_TOKEN	Pase de visitante compartido por enlace con token (codigo QR); solo datos del pase
+DELETE	/api/v1/push-subscriptions	AUTHENTICATED	NONE	Autoservicio: elimina suscripciones push del propio usuario (identidad del token)
+GET	/api/v1/push-subscriptions	AUTHENTICATED	NONE	Autoservicio: lista las suscripciones push del propio usuario
+POST	/api/v1/push-subscriptions	AUTHENTICATED	NONE	Autoservicio: registra una suscripcion push para el propio usuario
+GET	/api/v1/push-subscriptions/public-key	PUBLIC	NONE	Clave publica VAPID: es publica por diseno del protocolo Web Push
+GET	/api/v1/push-subscriptions/status	AUTHENTICATED	NONE	Autoservicio: estado de las suscripciones push del propio usuario
+POST	/api/v1/push-subscriptions/unsubscribe	AUTHENTICATED	NONE	Autoservicio: revoca la suscripcion push de este dispositivo, solo si es del propio usuario en la comunidad actual
+POST	/api/v1/push-subscriptions/test	AUTHENTICATED	NONE	Autoservicio: envia una notificacion de prueba al propio usuario
+GET	/api/v1/realtime/notifications	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'RESIDENT')	NONE	
+POST	/api/v1/realtime/notifications	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
+PUT	/api/v1/realtime/notifications/{id}/read	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'RESIDENT')	IT:UnitScopedResourcesIT	
+GET	/api/v1/realtime/panic	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
+POST	/api/v1/realtime/panic	pre:hasRole('RESIDENT')	NONE	
+GET	/api/v1/realtime/panic/active	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
+GET	/api/v1/realtime/panic/my	pre:hasRole('RESIDENT')	NONE	
+GET	/api/v1/realtime/panic/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/realtime/panic/{id}/acknowledge	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/realtime/panic/{id}/resolve	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/reporting/portfolio/excel	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'ACCOUNTANT')	NONE	
+GET	/api/v1/reporting/properties/{propertyId}/paz-y-salvo	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'ACCOUNTANT') or (hasRole('RESIDENT') and @accessValidator.isActiveResidentOfProperty(#propertyId))	IT:ResidentScopedExpressionsIT	Cierre SEC-9: expresion con recurso solo para RESIDENT; servicio filtra por comunidad; matriz de roles y aislamiento A/B probados
+GET	/api/v1/reporting/residents/census/csv	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
+GET	/api/v1/reservations	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	NONE	
+POST	/api/v1/reservations	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT')	NONE	
+GET	/api/v1/reservations/by-property/{propertyId}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF') or (hasRole('RESIDENT') and @accessValidator.isActiveResidentOfProperty(#propertyId))	IT:ResidentScopedExpressionsIT	Cierre SEC-9: expresion con recurso solo para RESIDENT; servicio filtra por comunidad; matriz de roles y aislamiento A/B probados
+GET	/api/v1/reservations/by-zone-and-date	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF', 'RESIDENT')	NONE	
+GET	/api/v1/reservations/my	pre:hasRole('RESIDENT')	NONE	
+GET	/api/v1/reservations/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF', 'RESIDENT')	IT:ResidentRemovalIT	
+POST	/api/v1/reservations/{id}/cancel	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'RESIDENT')	IT:UnitScopedResourcesIT	
+POST	/api/v1/reservations/{id}/confirm	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/reservations/{id}/reject	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/resident-invitations/{id}/regenerate	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:PropertyTransferSecurityIT	
+POST	/api/v1/resident-invitations/{id}/revoke	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:InvitationTokenSecurityIT	
+POST	/api/v1/resident/me/invitations	pre:hasRole('RESIDENT')	NONE	
+DELETE	/api/v1/resident/me/invitations/{invitationId}	pre:hasRole('RESIDENT')	IT:InvitationTokenSecurityIT	
+POST	/api/v1/resident/me/invitations/{invitationId}/regenerate	pre:hasRole('RESIDENT')	IT:InvitationTokenSecurityIT	
+PATCH	/api/v1/resident/me/onboarding	pre:hasRole('RESIDENT')	NONE	
+GET	/api/v1/resident/me/people	pre:hasRole('RESIDENT')	NONE	
+DELETE	/api/v1/resident/me/people/{personId}	pre:hasRole('RESIDENT')	IT:SseEventPolicyIT	
+PATCH	/api/v1/resident/me/people/{personId}/reactivate	pre:hasRole('RESIDENT')	IT:ResidentRemovalIT	
+GET	/api/v1/resident/me/pets	pre:hasRole('RESIDENT')	NONE	
+POST	/api/v1/resident/me/pets	pre:hasRole('RESIDENT')	NONE	
+DELETE	/api/v1/resident/me/pets/{petId}	pre:hasRole('RESIDENT')	IT:ResidentSelfVehiclePetDeleteIT	
+PUT	/api/v1/resident/me/pets/{petId}	pre:hasRole('RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/resident/me/properties	pre:hasRole('RESIDENT')	NONE	
+GET	/api/v1/resident/me/property-info	pre:hasRole('RESIDENT')	NONE	
+GET	/api/v1/resident/me/vehicles	pre:hasRole('RESIDENT')	NONE	
+POST	/api/v1/resident/me/vehicles	pre:hasRole('RESIDENT')	NONE	
+DELETE	/api/v1/resident/me/vehicles/{vehicleId}	pre:hasRole('RESIDENT')	IT:ResidentSelfVehiclePetDeleteIT	
+PUT	/api/v1/resident/me/vehicles/{vehicleId}	pre:hasRole('RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/resident/me/visitors	pre:hasRole('RESIDENT')	NONE	
+POST	/api/v1/resident/me/visitors	pre:hasRole('RESIDENT')	NONE	
+DELETE	/api/v1/resident/me/visitors/{visitorId}	pre:hasRole('RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+PUT	/api/v1/resident/me/visitors/{visitorId}	pre:hasRole('RESIDENT')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/residents	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	NONE	
+POST	/api/v1/residents	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/residents/by-property/{propertyId}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF') or (hasRole('RESIDENT') and @accessValidator.isActiveResidentOfProperty(#propertyId))	IT:ResidentScopedExpressionsIT	Cierre SEC-9: expresion con recurso solo para RESIDENT; servicio filtra por comunidad; matriz de roles y aislamiento A/B probados
+GET	/api/v1/residents/pets	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	NONE	
+POST	/api/v1/residents/pets	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/residents/pets/by-property/{propertyId}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF') or (hasRole('RESIDENT') and @accessValidator.isActiveResidentOfProperty(#propertyId))	IT:ResidentScopedExpressionsIT	Cierre SEC-9: expresion con recurso solo para RESIDENT; servicio filtra por comunidad; matriz de roles y aislamiento A/B probados
+DELETE	/api/v1/residents/pets/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/residents/users/{userId}/properties	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:ResidentRemovalIT	
+GET	/api/v1/residents/vehicles	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	NONE	
+POST	/api/v1/residents/vehicles	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/residents/vehicles/by-property/{propertyId}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF') or (hasRole('RESIDENT') and @accessValidator.isActiveResidentOfProperty(#propertyId))	IT:ResidentScopedExpressionsIT	Cierre SEC-9: expresion con recurso solo para RESIDENT; servicio filtra por comunidad; matriz de roles y aislamiento A/B probados
+DELETE	/api/v1/residents/vehicles/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+DELETE	/api/v1/residents/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:ResidentRemovalIT	
+GET	/api/v1/residents/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF') or (hasRole('RESIDENT') and @accessValidator.canReadResident(#id))	IT:ResidentScopedExpressionsIT	Cierre SEC-9: expresion con recurso solo para RESIDENT; servicio filtra por comunidad; matriz de roles y aislamiento A/B probados
+PUT	/api/v1/residents/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:ResidentRemovalIT	
+GET	/api/v1/roles/assignable	AUTHENTICATED	NONE	Catalogo: el metodo decide por el rol efectivo; lista vacia para quien no administra (AuthorizationP2IT). Excepcion explicita a la regla administrativa
+GET	/api/v1/saas/invoices	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+POST	/api/v1/saas/invoices/{invoiceId}/pay	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/saas/plans	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'READ_ONLY', 'COMMUNITY_ADMIN')	NONE	
+POST	/api/v1/saas/plans	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+GET	/api/v1/saas/plans/{id}	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'READ_ONLY', 'COMMUNITY_ADMIN')	UNVERIFIED	Catalogo global de planes SaaS (precios publicos de la plataforma), no es un recurso de comunidad. Riesgo BAJO
+POST	/api/v1/saas/subscription/change-plan	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/saas/subscription/current	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/saas/subscriptions	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+POST	/api/v1/saas/subscriptions/{id}/change-plan	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+POST	/api/v1/saas/subscriptions/{id}/status	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+POST	/api/v1/saas/tenants/{tenantId}/invoices/generate	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+POST	/api/v1/saas/tenants/{tenantId}/subscribe	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+GET	/api/v1/staff	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
+POST	/api/v1/staff	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/staff/attendance	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
+GET	/api/v1/staff/attendance/by-date	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	NONE	
+GET	/api/v1/staff/attendance/by-staff/{staffMemberId}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	IT:UnverifiedEndpointsIsolationIT	
+POST	/api/v1/staff/attendance/check-in	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	NONE	
+GET	/api/v1/staff/attendance/my-attendance	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	NONE	
+POST	/api/v1/staff/attendance/{staffMemberId}/check-out	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/staff/me	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	NONE	
+GET	/api/v1/staff/shifts	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	NONE	
+POST	/api/v1/staff/shifts	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	NONE	
+GET	/api/v1/staff/shifts/by-date	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	NONE	
+GET	/api/v1/staff/shifts/by-staff/{staffMemberId}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/staff/shifts/my-shifts	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY', 'STAFF')	NONE	
+DELETE	/api/v1/staff/shifts/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+PATCH	/api/v1/staff/shifts/{id}/cancel	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+PATCH	/api/v1/staff/shifts/{id}/reassign	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/staff/{id}	pre:hasAnyRole('SUPER_ADMIN', 'COMMUNITY_ADMIN', 'SECURITY')	IT:UnverifiedEndpointsIsolationIT	
+GET	/api/v1/sync/stream	PUBLIC	NONE	SSE: permitAll en la cadena, pero exige un ticket de un solo uso emitido a un usuario autenticado (SEC-5); los rechazos no llevan cuerpo
+POST	/api/v1/sync/stream-ticket	AUTHENTICATED	NONE	Autoservicio: ticket SSE para la comunidad resuelta del propio usuario (AuthorizationResolver)
+GET	/api/v1/tenants	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'READ_ONLY') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+POST	/api/v1/tenants	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+GET	/api/v1/tenants/by-organization/{organizationId}	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'READ_ONLY') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+GET	/api/v1/tenants/by-slug/{slug}	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'READ_ONLY', 'COMMUNITY_ADMIN')	IT:AdminAuthorizationIT	
+GET	/api/v1/tenants/{id}	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'READ_ONLY', 'COMMUNITY_ADMIN')	IT:AdminAuthorizationIT	
+PUT	/api/v1/tenants/{id}	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN', 'COMMUNITY_ADMIN')	IT:AdminAuthorizationIT	
+POST	/api/v1/tenants/{id}/activate	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+POST	/api/v1/tenants/{id}/cancel	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+POST	/api/v1/tenants/{id}/change-plan	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+PUT	/api/v1/tenants/{id}/features/{featureKey}	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+POST	/api/v1/tenants/{id}/suspend	pre:hasAnyRole('SUPER_ADMIN', 'PLATFORM_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+POST	/api/v1/users	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+GET	/api/v1/users/all	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+GET	/api/v1/users/internal	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+GET	/api/v1/users/me	AUTHENTICATED	NONE	Autoservicio: perfil del propio usuario
+PATCH	/api/v1/users/me	AUTHENTICATED	NONE	Autoservicio: edicion del perfil propio
+POST	/api/v1/users/me/change-password	AUTHENTICATED	NONE	Autoservicio: cambio de contrasena propia (exige la actual y revoca sesiones)
+GET	/api/v1/users/tenant-admins	pre:hasRole('SUPER_ADMIN') and hasAuthority('SCOPE_GLOBAL')	GLOBAL_ONLY	
+ANY	/error	AUTHENTICATED	FRAMEWORK	BasicErrorController de Spring Boot: solo renderiza errores; exige autenticacion por la regla global
