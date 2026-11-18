@@ -248,4 +248,69 @@ class PqrsPrivacyIT extends PostgresIntegrationTest {
         as(a.owner(), a, post("/api/v1/pqrs/{id}/assign/{tech}", ownPqrs.getId(), a.owner().getId())).andExpect(status().isForbidden());
         assertThat(pqrsRepository.findById(ownPqrs.getId())).isPresent();
     }
+
+    @Test
+    @DisplayName("Resolver: la nota llega en el cuerpo JSON y se guarda; otra comunidad 404 sin cambios; nota demasiado larga 400")
+    void resolveWithJsonBody() throws Exception {
+        // Administrador de OTRA comunidad: no la encuentra ni la cambia.
+        as(b.admin(), b, json(post("/api/v1/pqrs/{id}/resolve", ownPqrs.getId()), "{\"responseNotes\":\"Intruso\"}"))
+                .andExpect(status().isNotFound());
+        as(a.admin(), a, get("/api/v1/pqrs/{id}", ownPqrs.getId()))
+                .andExpect(jsonPath("$.data.status").value("NEW"));
+
+        as(a.admin(), a, json(post("/api/v1/pqrs/{id}/resolve", ownPqrs.getId()), "{\"responseNotes\":\"" + "y".repeat(1001) + "\"}"))
+                .andExpect(status().isBadRequest());
+
+        as(a.admin(), a, json(post("/api/v1/pqrs/{id}/resolve", ownPqrs.getId()),
+                "{\"responseNotes\":\"  Se cambió el empaque de la válvula  \"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("RESOLVED"))
+                .andExpect(jsonPath("$.data.responseNotes").value("Se cambió el empaque de la válvula"));
+        // Queda en la base: una lectura nueva lo devuelve resuelto y con la nota.
+        as(a.admin(), a, get("/api/v1/pqrs/{id}", ownPqrs.getId()))
+                .andExpect(jsonPath("$.data.status").value("RESOLVED"))
+                .andExpect(jsonPath("$.data.responseNotes").value("Se cambió el empaque de la válvula"));
+    }
+
+    @Test
+    @DisplayName("Administracion radica a nombre de un residente ACTIVO de la unidad; otro de otra unidad 400, de otra comunidad 404, inactivo 400")
+    void adminCreatesForResidentOfUnit() throws Exception {
+        long before = pqrsRepository.count();
+        as(a.admin(), a, json(post("/api/v1/pqrs"), newPqrs(a.home().getId(), a.neighbourResident().getId())))
+                .andExpect(status().isBadRequest());
+        as(a.admin(), a, json(post("/api/v1/pqrs"), newPqrs(a.home().getId(), b.censusOnly().getId())))
+                .andExpect(status().isNotFound());
+        as(a.admin(), a, json(post("/api/v1/pqrs"), newPqrs(a.home().getId(), UUID.randomUUID())))
+                .andExpect(status().isNotFound());
+        assertThat(pqrsRepository.count()).isEqualTo(before);
+
+        as(a.admin(), a, json(post("/api/v1/pqrs"), newPqrs(a.home().getId(), a.censusOnly().getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.propertyId").value(a.home().getId().toString()))
+                .andExpect(jsonPath("$.data.residentId").value(a.censusOnly().getId().toString()))
+                .andExpect(jsonPath("$.data.residentName").value(a.censusOnly().getName()));
+
+        var census = residentRepository.findById(a.censusOnly().getId()).orElseThrow();
+        census.setStatus(ResidentStatus.INACTIVE);
+        residentRepository.save(census);
+        as(a.admin(), a, json(post("/api/v1/pqrs"), newPqrs(a.home().getId(), a.censusOnly().getId())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("Editar: pasar a RESUELTA guarda la nota y la fecha; estado no valido 400; otra comunidad 404")
+    void adminEditsToResolved() throws Exception {
+        var put = org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/pqrs/{id}", ownPqrs.getId());
+        as(b.admin(), b, json(put, "{\"status\":\"RESOLVED\"}")).andExpect(status().isNotFound());
+        as(a.admin(), a, json(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/pqrs/{id}", ownPqrs.getId()),
+                "{\"status\":\"INVENTADO\"}")).andExpect(status().isBadRequest());
+
+        as(a.admin(), a, json(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/pqrs/{id}", ownPqrs.getId()),
+                "{\"title\":\"Filtracion revisada\",\"priority\":\"HIGH\",\"status\":\"RESOLVED\",\"responseNotes\":\" Se selló la junta \"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.title").value("Filtracion revisada"))
+                .andExpect(jsonPath("$.data.status").value("RESOLVED"))
+                .andExpect(jsonPath("$.data.responseNotes").value("Se selló la junta"))
+                .andExpect(jsonPath("$.data.resolvedAt").isNotEmpty());
+    }
 }

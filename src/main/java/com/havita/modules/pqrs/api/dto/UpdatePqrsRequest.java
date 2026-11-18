@@ -16,5 +16,9 @@ public record UpdatePqrsRequest(
         @Size(max = 30, message = "La prioridad no puede exceder 30 caracteres")
         String priority,
         
-        String status
+        String status,
+
+        /** Nota de la solucion (se guarda si la PQRS queda resuelta o cerrada). */
+        @Size(max = 1000, message = "La nota de la solución no puede exceder 1000 caracteres")
+        String responseNotes
 ) {}

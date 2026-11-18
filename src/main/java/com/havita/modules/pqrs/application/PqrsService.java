@@ -91,9 +91,21 @@ public class PqrsService {
 
         Resident resident = null;
         if (request.residentId() != null) {
-            resident = residentRepository.findByIdAndTenantId(request.residentId(), tenantId).orElse(null);
-            if (residentCaller && resident != null && !resident.getProperty().getId().equals(property.getId())) {
+            // El solicitante debe existir en ESTA comunidad, pertenecer a la unidad indicada y estar activo, sea
+            // quien sea quien radica (antes la administracion podia asociar un residente de otra unidad).
+            resident = residentRepository.findByIdAndTenantId(request.residentId(), tenantId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Resident", request.residentId()));
+            boolean samePropertyResident = resident.getProperty() != null && resident.getProperty().getId().equals(property.getId());
+            if (residentCaller && !samePropertyResident) {
                 throw new AccessDeniedException("El residente indicado no pertenece a este inmueble.");
+            }
+            if (!samePropertyResident) {
+                throw new com.havita.common.exception.InvalidRequestException("PQRS_RESIDENT_NOT_IN_PROPERTY",
+                        "El residente indicado no pertenece a la unidad seleccionada.");
+            }
+            if (resident.getStatus() != com.havita.modules.resident.domain.ResidentStatus.ACTIVE) {
+                throw new com.havita.common.exception.InvalidRequestException("PQRS_RESIDENT_NOT_ACTIVE",
+                        "El residente indicado no está activo en la unidad.");
             }
         }
 
@@ -121,7 +133,7 @@ public class PqrsService {
                 .pqrs(pqrs)
                 .user(creator)
                 .authorName(creator != null ? creator.getFullName() : (resident != null ? resident.getName() : "Residente"))
-                .authorRole("RESIDENT")
+                .authorRole(residentCaller ? "RESIDENT" : "COMMUNITY_ADMIN")
                 .comment("Solicitud radicada en el sistema.")
                 .statusChangedTo(PqrsTimelineEventStatus.NEW)
                 .build();
@@ -143,10 +155,21 @@ public class PqrsService {
         if (request.category() != null && !request.category().isBlank()) pqrs.setCategory(request.category());
         if (request.priority() != null && !request.priority().isBlank()) pqrs.setPriority(request.priority());
         
+        String notes = request.responseNotes() == null || request.responseNotes().isBlank() ? null : request.responseNotes().trim();
         if (request.status() != null && !request.status().isBlank()) {
-            PqrsRequestStatus newStatus = PqrsRequestStatus.valueOf(request.status());
+            PqrsRequestStatus newStatus;
+            try {
+                newStatus = PqrsRequestStatus.valueOf(request.status());
+            } catch (IllegalArgumentException e) {
+                throw new com.havita.common.exception.InvalidRequestException("PQRS_INVALID_STATUS", "Estado de la solicitud no válido.");
+            }
             if (pqrs.getStatus() != newStatus) {
-                pqrs.setStatus(newStatus);
+                // RESOLVED y CLOSED registran su fecha (antes solo cambiaba el estado).
+                switch (newStatus) {
+                    case RESOLVED -> pqrs.resolve(notes);
+                    case CLOSED -> pqrs.close();
+                    default -> pqrs.setStatus(newStatus);
+                }
                 PqrsTimelineEventStatus timelineStatus = PqrsTimelineEventStatus.valueOf(request.status());
                 PqrsTimelineEvent event = PqrsTimelineEvent.builder()
                         .pqrs(pqrs)
@@ -160,6 +183,10 @@ public class PqrsService {
             }
         }
         
+        // Nota de la solucion editada sobre una PQRS ya resuelta o cerrada.
+        if (notes != null && (pqrs.getStatus() == PqrsRequestStatus.RESOLVED || pqrs.getStatus() == PqrsRequestStatus.CLOSED)) {
+            pqrs.setResponseNotes(notes);
+        }
         pqrs = pqrsRequestRepository.save(pqrs);
         return toResponse(pqrs, true);
     }
@@ -203,6 +230,11 @@ public class PqrsService {
         UUID tenantId = TenantContextHolder.getRequiredTenantId();
         PqrsRequest pqrs = pqrsRequestRepository.findByIdAndTenantId(id, tenantId)
                 .orElseThrow(() -> new ResourceNotFoundException("PqrsRequest", id));
+        resolutionNotes = resolutionNotes == null || resolutionNotes.isBlank() ? null : resolutionNotes.trim();
+        if (resolutionNotes != null && resolutionNotes.length() > 1000) {
+            throw new com.havita.common.exception.InvalidRequestException("PQRS_RESOLUTION_TOO_LONG",
+                    "La nota de la solución no puede exceder 1000 caracteres.");
+        }
 
         User author = authorUserId != null ? userRepository.findById(authorUserId).orElse(null) : null;
 

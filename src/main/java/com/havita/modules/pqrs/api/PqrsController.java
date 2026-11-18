@@ -114,13 +114,16 @@ public class PqrsController {
     public ResponseEntity<ApiResponse<PqrsResponse>> resolve(
             @PathVariable UUID id,
             @RequestParam(required = false) String responseNotes,
+            // La app envia la nota en el cuerpo JSON; el parametro de URL se mantiene por compatibilidad.
+            @Valid @RequestBody(required = false) com.havita.modules.pqrs.api.dto.ResolvePqrsRequest body,
             Authentication authentication) {
         UUID userId = null;
         try {
             userId = UUID.fromString(authentication.getName());
         } catch (Exception ignored) {}
 
-        return ResponseEntity.ok(ApiResponse.ok(pqrsService.resolve(id, responseNotes, userId), "Solicitud marcada como resuelta"));
+        String notes = body != null && body.responseNotes() != null ? body.responseNotes() : responseNotes;
+        return ResponseEntity.ok(ApiResponse.ok(pqrsService.resolve(id, notes, userId), "Solicitud marcada como resuelta"));
     }
 
     @PostMapping("/{id}/comments")
